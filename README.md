@@ -3,7 +3,7 @@
 **Thiết kế và đánh giá cơ chế tương tác cho hệ thống viết chữ trên không bằng cử chỉ ngón tay**
 *(Designing and Evaluating Interaction Mechanisms for a Finger-Based Air-Writing System)*
 
-## Cài đặt môi trường (Python 3.12 / 3.13, CPU)
+## Cài đặt môi trường (Python 3.12+, CPU — kiểm chứng trên 3.13 / 3.14 / 3.15)
 
 ```bash
 # macOS / Linux
@@ -13,7 +13,7 @@ pip install -e ".[dev]"
 pre-commit install
 
 # Windows (PowerShell)
-py -3.13 -m venv .venv
+py -3 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 pre-commit install

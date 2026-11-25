@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "airwriting"
 version = "0.1.0"
 description = "Designing and Evaluating Interaction Mechanisms for a Finger-Based Air-Writing System"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12"
 dependencies = [
   "numpy>=2.5",
   "scipy>=1.18",
