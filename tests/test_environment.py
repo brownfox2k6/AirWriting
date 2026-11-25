@@ -14,7 +14,7 @@ def test_check_runtime_environment_imports_all_core_libraries_on_cpu() -> None:
     assert set(report.versions.keys()) == {
         "cv2",
         "mediapipe",
-        "PyQt5",
+        "PyQt6",
         "torch",
         "torchvision",
         "scipy",

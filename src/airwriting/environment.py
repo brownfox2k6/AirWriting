@@ -11,7 +11,7 @@ from types import ModuleType
 CORE_DEPENDENCIES: tuple[str, ...] = (
     "cv2",
     "mediapipe",
-    "PyQt5",
+    "PyQt6",
     "torch",
     "torchvision",
     "scipy",
@@ -37,8 +37,8 @@ def _read_module_version(
     version = getattr(module, "__version__", None)
     if isinstance(version, str) and version:
         return version
-    if name == "PyQt5":
-        qt_core = importer("PyQt5.QtCore")
+    if name == "PyQt6":
+        qt_core = importer("PyQt6.QtCore")
         qt_ver = getattr(qt_core, "PYQT_VERSION_STR", None)
         if isinstance(qt_ver, str) and qt_ver:
             return qt_ver

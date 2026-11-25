@@ -35,7 +35,7 @@ config/                  # Cấu hình tập trung (16 ký tự chuẩn & ngư�
 src/airwriting/
   core/                  # Camera, Active ROI, MediaPipe tracking, One Euro Filter, JSON trajectory
   interaction/           # State Machine (Buxton 0-1-2 + Commit) & 3 cơ chế M1, M2, M3
-  ui/                    # PyQt5 views (Demo, Data Collector, Experiment Runner), feedback, earcons, XAI
+  ui/                    # PyQt6 views (Demo, Data Collector, Experiment Runner), feedback, earcons, XAI
   recognition/           # Baseline $P, dựng ảnh quỹ đạo màu, MobileNetV3-Small
   experiment/            # Bộ sinh lịch trình 6 hoán vị, auto-detector False Start/End, CSV & thống kê
 tests/                   # Kiểm thử tự động (pytest)
