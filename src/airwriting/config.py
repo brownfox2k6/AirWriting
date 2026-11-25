@@ -30,20 +30,23 @@ class ConfigValidationError(ValueError):
 
 @dataclass(frozen=True)
 class CharacterSetConfig:
-    single_stroke_labels: tuple[str, ...]
-    multi_stroke_labels: tuple[str, ...]
     expected_strokes_map: dict[str, int]
 
     @property
     def all_labels(self) -> tuple[str, ...]:
-        return self.single_stroke_labels + self.multi_stroke_labels
+        return tuple(self.expected_strokes_map.keys())
+
+    @property
+    def single_stroke_labels(self) -> tuple[str, ...]:
+        return tuple(label for label, count in self.expected_strokes_map.items() if count == 1)
+
+    @property
+    def multi_stroke_labels(self) -> tuple[str, ...]:
+        return tuple(label for label, count in self.expected_strokes_map.items() if count >= 2)
 
     def char_type(self, label: str) -> Literal["single", "multi"]:
-        if label in self.single_stroke_labels:
-            return "single"
-        if label in self.multi_stroke_labels:
-            return "multi"
-        raise KeyError(f"Unknown character label: {label!r}")
+        strokes = self.expected_strokes(label)
+        return "single" if strokes == 1 else "multi"
 
     def expected_strokes(self, label: str) -> int:
         if label not in self.expected_strokes_map:
@@ -141,23 +144,20 @@ def _build_section(section_name: str, cls: type[Any], data: Any) -> Any:
 
 
 def _validate_config(config: AppConfig) -> None:
-    single = config.characters.single_stroke_labels
-    multi = config.characters.multi_stroke_labels
-    if len(set(single)) != len(single) or len(set(multi)) != len(multi):
-        raise ConfigValidationError("Duplicate labels found inside character groups")
-    overlap = set(single) & set(multi)
-    if overlap:
-        raise ConfigValidationError(f"Character labels overlap between single and multi: {overlap}")
     expected_map = config.characters.expected_strokes_map
-    for label in single:
-        if expected_map.get(label) != 1:
-            raise ConfigValidationError(f"Single-stroke character {label!r} must expect 1 stroke")
-    for label in multi:
-        strokes = expected_map.get(label)
-        if not isinstance(strokes, int) or strokes < 2:
+    if not expected_map:
+        raise ConfigValidationError("Character set must not be empty")
+    for label, strokes in expected_map.items():
+        if not isinstance(label, str) or not label.strip():
+            raise ConfigValidationError(f"Invalid character label: {label!r}")
+        if isinstance(strokes, bool) or not isinstance(strokes, int) or strokes < 1:
             raise ConfigValidationError(
-                f"Multi-stroke character {label!r} must expect >= 2 strokes"
+                f"Character {label!r} must expect a positive integer stroke count"
             )
+    if not config.characters.single_stroke_labels or not config.characters.multi_stroke_labels:
+        raise ConfigValidationError(
+            "Character set must include both single-stroke and multi-stroke characters"
+        )
 
     roi = config.roi
     if not (0.0 <= roi.x_min < roi.x_max <= 1.0 and 0.0 <= roi.y_min < roi.y_max <= 1.0):
@@ -213,16 +213,11 @@ def load_config(
     chars_raw = raw["characters"]
     if not isinstance(chars_raw, Mapping):
         raise ConfigValidationError("Section 'characters' must be a mapping")
-    _check_exact_keys(
-        "characters",
-        chars_raw,
-        {"single_stroke_labels", "multi_stroke_labels", "expected_strokes"},
-    )
-    characters = CharacterSetConfig(
-        single_stroke_labels=tuple(chars_raw["single_stroke_labels"]),
-        multi_stroke_labels=tuple(chars_raw["multi_stroke_labels"]),
-        expected_strokes_map=dict(chars_raw["expected_strokes"]),
-    )
+    _check_exact_keys("characters", chars_raw, {"expected_strokes"})
+    expected_strokes = chars_raw["expected_strokes"]
+    if not isinstance(expected_strokes, Mapping):
+        raise ConfigValidationError("'characters.expected_strokes' must be a mapping")
+    characters = CharacterSetConfig(expected_strokes_map=dict(expected_strokes))
 
     config = AppConfig(
         characters=characters,
@@ -242,8 +237,6 @@ def save_config(config: AppConfig, path: Path | str) -> None:
     _validate_config(config)
     payload = {
         "characters": {
-            "single_stroke_labels": list(config.characters.single_stroke_labels),
-            "multi_stroke_labels": list(config.characters.multi_stroke_labels),
             "expected_strokes": dict(config.characters.expected_strokes_map),
         },
         "roi": asdict(config.roi),

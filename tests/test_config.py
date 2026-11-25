@@ -76,12 +76,8 @@ def test_load_config_applies_nested_overrides_without_clobbering_other_fields() 
         {"recognition": {"confidence_threshold": 1.5}},
         {"recognition": {"active_model": "resnet18"}},
         {"experiment": {"max_attempts_per_char": 0}},
-        {
-            "characters": {
-                "single_stroke_labels": ["2", "A"],
-                "multi_stroke_labels": ["A", "E"],
-            }
-        },
+        {"characters": {"expected_strokes": {"A": 0}}},
+        {"characters": {"expected_strokes": {"2": True}}},
         {"unknown_section": {"foo": 1}},
         {"m1_dwell": {"typo_threshold": 0.5}},
     ],
