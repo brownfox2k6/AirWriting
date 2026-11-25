@@ -1,0 +1,13 @@
+# Core runtime dependencies (CPU-compatible, headless OpenCV to avoid Qt conflicts with PyQt5)
+numpy>=1.26
+scipy>=1.12
+opencv-python-headless>=4.9
+mediapipe>=0.10.14
+PyQt5>=5.15
+torch>=2.2
+torchvision>=0.17
+matplotlib>=3.8
+
+# Development & testing
+pytest>=8.0
+ruff>=0.6
