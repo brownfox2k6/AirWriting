@@ -34,9 +34,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: |
-            pyproject.toml
-            requirements.txt
+          cache-dependency-path: pyproject.toml
 
       - name: Install headless OpenCV, MediaPipe & PyQt5 system libraries
         run: |
