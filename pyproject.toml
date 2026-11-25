@@ -1,27 +1,27 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=78.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "airwriting"
 version = "0.1.0"
 description = "Designing and Evaluating Interaction Mechanisms for a Finger-Based Air-Writing System"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.12,<3.14"
 dependencies = [
-  "numpy>=1.26",
-  "scipy>=1.12",
-  "opencv-python-headless>=4.9",
-  "mediapipe>=0.10.14",
-  "PyQt5>=5.15",
-  "torch>=2.2",
-  "torchvision>=0.17",
-  "matplotlib>=3.8",
+  "numpy>=2.5",
+  "scipy>=1.18",
+  "opencv-python-headless>=5.1",
+  "mediapipe>=1.2",
+  "PyQt5>=5.15.11",
+  "torch>=2.15",
+  "torchvision>=0.29",
+  "matplotlib>=3.11",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.0",
-  "ruff>=0.6",
+  "pytest>=9.2",
+  "ruff>=0.17",
 ]
 
 [tool.setuptools.packages.find]
@@ -32,7 +32,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
 
