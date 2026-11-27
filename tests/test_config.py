@@ -7,21 +7,51 @@ import pytest
 from airwriting.config import ConfigValidationError, load_config, save_config
 
 
-def test_load_default_config_exposes_16_balanced_characters_and_expected_strokes() -> None:
+def test_load_default_config_exposes_36_characters_and_16_balanced_eval_subset() -> None:
     config = load_config()
 
-    assert config.characters.single_stroke_labels == ("2", "3", "6", "8", "9", "C", "L", "U")
-    assert config.characters.multi_stroke_labels == ("4", "5", "A", "E", "H", "K", "T", "X")
-    assert len(config.characters.all_labels) == 16
+    expected_all = set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    assert len(config.characters.all_labels) == 36
+    assert set(config.characters.all_labels) == expected_all
     assert config.characters.char_type("L") == "single"
     assert config.characters.char_type("A") == "multi"
+    assert config.characters.expected_strokes("0") == 1
+    assert config.characters.expected_strokes("1") == 1
     assert config.characters.expected_strokes("2") == 1
     assert config.characters.expected_strokes("4") == 2
     assert config.characters.expected_strokes("T") == 2
+    assert config.characters.expected_strokes("B") == 2
     assert config.characters.expected_strokes("A") == 3
     assert config.characters.expected_strokes("H") == 3
+    assert config.characters.expected_strokes("I") == 3
     assert config.characters.expected_strokes("K") == 3
+    assert config.characters.expected_strokes("R") == 3
     assert config.characters.expected_strokes("E") == 4
+    assert config.characters.expected_strokes("O") == 1
+    assert config.characters.expected_strokes("S") == 1
+    assert config.characters.expected_strokes("Z") == 1
+
+    eval_chars = config.experiment.evaluation_characters
+    assert eval_chars == (
+        "2",
+        "3",
+        "6",
+        "8",
+        "9",
+        "C",
+        "L",
+        "U",
+        "4",
+        "5",
+        "A",
+        "E",
+        "H",
+        "K",
+        "T",
+        "X",
+    )
+    assert sum(1 for c in eval_chars if config.characters.char_type(c) == "single") == 8
+    assert sum(1 for c in eval_chars if config.characters.char_type(c) == "multi") == 8
 
 
 def test_load_default_config_exposes_interaction_filter_and_experiment_defaults() -> None:
@@ -64,7 +94,8 @@ def test_load_config_applies_nested_overrides_without_clobbering_other_fields() 
     assert config.m1_dwell.commit_timeout_s == 1.1
     assert config.recognition.active_model == "mobilenet_v3"
     assert config.recognition.confidence_threshold == 0.7
-    assert len(config.characters.all_labels) == 16
+    assert len(config.characters.all_labels) == 36
+    assert len(config.experiment.evaluation_characters) == 16
 
 
 @pytest.mark.parametrize(
@@ -80,6 +111,12 @@ def test_load_config_applies_nested_overrides_without_clobbering_other_fields() 
         {"recognition": {"confidence_threshold": 1.5}},
         {"recognition": {"active_model": "resnet18"}},
         {"experiment": {"max_attempts_per_char": 0}},
+        {"experiment": {"evaluation_characters": []}},
+        {"experiment": {"evaluation_characters": "24"}},
+        {"experiment": {"evaluation_characters": ["2", "4", "?"]}},
+        {"experiment": {"evaluation_characters": ["2", "2", "4"]}},
+        {"experiment": {"evaluation_characters": ["2", "3", "6"]}},
+        {"experiment": {"evaluation_characters": ["4", "5", "A"]}},
         {"characters": {"expected_strokes": {"A": 0}}},
         {"characters": {"expected_strokes": {"2": True}}},
         {"unknown_section": {"foo": 1}},
@@ -98,6 +135,7 @@ def test_save_and_reload_config_round_trips_custom_thresholds(tmp_path: Path) ->
             "m1_dwell": {"dwell_start_s": 0.42, "commit_timeout_s": 1.05},
             "m2_gesture": {"debounce_s": 0.14},
             "recognition": {"active_model": "mobilenet_v3"},
+            "experiment": {"evaluation_characters": ["2", "4", "C", "A"]},
         }
     )
 
@@ -108,3 +146,4 @@ def test_save_and_reload_config_round_trips_custom_thresholds(tmp_path: Path) ->
     assert reloaded.m1_dwell.dwell_start_s == 0.42
     assert reloaded.m2_gesture.debounce_s == 0.14
     assert reloaded.recognition.active_model == "mobilenet_v3"
+    assert reloaded.experiment.evaluation_characters == ("2", "4", "C", "A")
