@@ -99,6 +99,7 @@ class RecognitionConfig:
 
 @dataclass(frozen=True)
 class ExperimentConfig:
+    evaluation_characters: tuple[str, ...]
     max_attempts_per_char: int
     rest_duration_s: float
     false_end_break_s: float
@@ -197,7 +198,31 @@ def _validate_config(config: AppConfig) -> None:
         raise ConfigValidationError(f"Invalid recognition parameters: {rec}")
 
     exp = config.experiment
-    if exp.max_attempts_per_char < 1 or exp.rest_duration_s < 0.0 or exp.false_end_break_s <= 0.0:
+    if not exp.evaluation_characters:
+        raise ConfigValidationError("'experiment.evaluation_characters' must not be empty")
+    if len(set(exp.evaluation_characters)) != len(exp.evaluation_characters):
+        raise ConfigValidationError(
+            "'experiment.evaluation_characters' must not contain duplicates"
+        )
+    unknown_eval = [c for c in exp.evaluation_characters if c not in expected_map]
+    if unknown_eval:
+        raise ConfigValidationError(
+            f"'experiment.evaluation_characters' contains unknown label(s): {unknown_eval}"
+        )
+    eval_single = [c for c in exp.evaluation_characters if expected_map[c] == 1]
+    eval_multi = [c for c in exp.evaluation_characters if expected_map[c] >= 2]
+    if not eval_single or not eval_multi:
+        raise ConfigValidationError(
+            "'experiment.evaluation_characters' must include both single-stroke and multi-stroke"
+            " characters"
+        )
+    if (
+        isinstance(exp.max_attempts_per_char, bool)
+        or not isinstance(exp.max_attempts_per_char, int)
+        or exp.max_attempts_per_char < 1
+        or exp.rest_duration_s < 0.0
+        or exp.false_end_break_s <= 0.0
+    ):
         raise ConfigValidationError(f"Invalid experiment parameters: {exp}")
 
 
@@ -225,6 +250,28 @@ def load_config(
         raise ConfigValidationError("'characters.expected_strokes' must be a mapping")
     characters = CharacterSetConfig(expected_strokes_map=dict(expected_strokes))
 
+    exp_raw = raw["experiment"]
+    if not isinstance(exp_raw, Mapping):
+        raise ConfigValidationError("Section 'experiment' must be a mapping")
+    _check_exact_keys(
+        "experiment",
+        exp_raw,
+        {"evaluation_characters", "max_attempts_per_char", "rest_duration_s", "false_end_break_s"},
+    )
+    eval_chars_raw = exp_raw["evaluation_characters"]
+    if not isinstance(eval_chars_raw, (list, tuple)) or isinstance(eval_chars_raw, (str, bytes)):
+        raise ConfigValidationError(
+            "'experiment.evaluation_characters' must be a list of character labels"
+        )
+    if not all(isinstance(item, str) for item in eval_chars_raw):
+        raise ConfigValidationError("'experiment.evaluation_characters' must contain only strings")
+    experiment = ExperimentConfig(
+        evaluation_characters=tuple(eval_chars_raw),
+        max_attempts_per_char=exp_raw["max_attempts_per_char"],
+        rest_duration_s=exp_raw["rest_duration_s"],
+        false_end_break_s=exp_raw["false_end_break_s"],
+    )
+
     config = AppConfig(
         characters=characters,
         roi=_build_section("roi", ROIConfig, raw["roi"]),
@@ -233,7 +280,7 @@ def load_config(
         m2_gesture=_build_section("m2_gesture", M2GestureConfig, raw["m2_gesture"]),
         m3_spacebar=_build_section("m3_spacebar", M3SpacebarConfig, raw["m3_spacebar"]),
         recognition=_build_section("recognition", RecognitionConfig, raw["recognition"]),
-        experiment=_build_section("experiment", ExperimentConfig, raw["experiment"]),
+        experiment=experiment,
     )
     _validate_config(config)
     return config
@@ -251,7 +298,12 @@ def save_config(config: AppConfig, path: Path | str) -> None:
         "m2_gesture": asdict(config.m2_gesture),
         "m3_spacebar": asdict(config.m3_spacebar),
         "recognition": asdict(config.recognition),
-        "experiment": asdict(config.experiment),
+        "experiment": {
+            "evaluation_characters": list(config.experiment.evaluation_characters),
+            "max_attempts_per_char": config.experiment.max_attempts_per_char,
+            "rest_duration_s": config.experiment.rest_duration_s,
+            "false_end_break_s": config.experiment.false_end_break_s,
+        },
     }
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
