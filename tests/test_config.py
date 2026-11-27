@@ -29,6 +29,7 @@ def test_load_default_config_exposes_interaction_filter_and_experiment_defaults(
 
     assert 0.0 <= config.roi.x_min < config.roi.x_max <= 1.0
     assert 0.0 <= config.roi.y_min < config.roi.y_max <= 1.0
+    assert config.one_euro.enabled is True
     assert config.one_euro.min_cutoff > 0.0
     assert config.one_euro.beta >= 0.0
     assert config.one_euro.d_cutoff > 0.0
@@ -51,11 +52,13 @@ def test_load_default_config_exposes_interaction_filter_and_experiment_defaults(
 def test_load_config_applies_nested_overrides_without_clobbering_other_fields() -> None:
     config = load_config(
         overrides={
+            "one_euro": {"enabled": False},
             "m1_dwell": {"dwell_start_s": 0.35},
             "recognition": {"active_model": "mobilenet_v3"},
         }
     )
 
+    assert config.one_euro.enabled is False
     assert config.m1_dwell.dwell_start_s == 0.35
     assert config.m1_dwell.dwell_end_s == 0.45
     assert config.m1_dwell.commit_timeout_s == 1.1
@@ -68,6 +71,7 @@ def test_load_config_applies_nested_overrides_without_clobbering_other_fields() 
     "invalid_overrides",
     [
         {"m1_dwell": {"dwell_start_s": 0.0}},
+        {"one_euro": {"enabled": "yes"}},
         {"m1_dwell": {"commit_timeout_s": -1.0}},
         {"m2_gesture": {"debounce_s": -0.05}},
         {"roi": {"x_min": 0.8, "x_max": 0.2}},

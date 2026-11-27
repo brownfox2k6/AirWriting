@@ -7,13 +7,16 @@ import time
 from collections import deque
 from collections.abc import Callable
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import cv2
 import numpy as np
 from numpy.typing import NDArray
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QImage
+
+if TYPE_CHECKING:
+    from airwriting.core.tracking import HandTracker
 
 
 class Handedness(StrEnum):
@@ -74,9 +77,13 @@ def mirror_frame(frame: NDArray[np.uint8]) -> NDArray[np.uint8]:
     return np.ascontiguousarray(flipped, dtype=np.uint8)
 
 
-def bgr_to_qimage(frame: NDArray[np.uint8]) -> QImage:
-    """Convert an OpenCV BGR frame to an owned RGB888 QImage safe across threads."""
-    rgb = np.ascontiguousarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), dtype=np.uint8)
+def bgr_to_rgb(frame: NDArray[np.uint8]) -> NDArray[np.uint8]:
+    """Convert an OpenCV BGR frame to a contiguous RGB uint8 array."""
+    return np.ascontiguousarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), dtype=np.uint8)
+
+
+def rgb_to_qimage(rgb: NDArray[np.uint8]) -> QImage:
+    """Convert a contiguous RGB uint8 frame to an owned RGB888 QImage safe across threads."""
     height, width, channels = rgb.shape
     bytes_per_line = int(channels * width)
     image = QImage(
@@ -87,6 +94,11 @@ def bgr_to_qimage(frame: NDArray[np.uint8]) -> QImage:
         QImage.Format.Format_RGB888,
     )
     return image.copy()
+
+
+def bgr_to_qimage(frame: NDArray[np.uint8]) -> QImage:
+    """Convert an OpenCV BGR frame to an owned RGB888 QImage safe across threads."""
+    return rgb_to_qimage(bgr_to_rgb(frame))
 
 
 class OpenCVFrameSource:
@@ -130,9 +142,10 @@ class OpenCVFrameSource:
 
 
 class CameraWorker(QThread):
-    """Background QThread that reads, mirrors, timestamps, and emits webcam frames."""
+    """Background QThread that reads, mirrors, tracks, and emits webcam frames."""
 
     frame_ready = pyqtSignal(QImage, float, arguments=["image", "fps"])
+    tracking_ready = pyqtSignal(object, arguments=["result"])
     error_occurred = pyqtSignal(str, arguments=["message"])
 
     def __init__(
@@ -141,12 +154,16 @@ class CameraWorker(QThread):
         *,
         mirror: bool = True,
         fps_window: int = 30,
+        hand_tracker: HandTracker | None = None,
+        clock: Callable[[], float] = time.perf_counter,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._source = source
         self._mirror = mirror
-        self._fps_counter = FPSCounter(window_size=fps_window)
+        self._hand_tracker = hand_tracker
+        self._clock = clock
+        self._fps_counter = FPSCounter(window_size=fps_window, clock=clock)
         self._stop_event = threading.Event()
 
     def run(self) -> None:
@@ -167,14 +184,25 @@ class CameraWorker(QThread):
                     break
 
                 processed = mirror_frame(frame) if self._mirror else frame
-                image = bgr_to_qimage(processed)
-                fps = self._fps_counter.tick()
+                rgb = bgr_to_rgb(processed)
+                image = rgb_to_qimage(rgb)
+                now = self._clock()
+                tracking_result = (
+                    self._hand_tracker.process_frame(rgb, now)
+                    if self._hand_tracker is not None and not self._stop_event.is_set()
+                    else None
+                )
+                fps = self._fps_counter.tick(now)
                 if not self._stop_event.is_set():
                     self.frame_ready.emit(image, fps)
+                    if tracking_result is not None:
+                        self.tracking_ready.emit(tracking_result)
         except Exception as exc:
             if not self._stop_event.is_set():
                 self.error_occurred.emit(f"Lỗi webcam: {exc}")
         finally:
+            if self._hand_tracker is not None:
+                self._hand_tracker.close()
             self._source.release()
 
     def stop(self, timeout_ms: int = 3000) -> None:

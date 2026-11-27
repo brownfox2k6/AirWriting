@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from PyQt6.QtWidgets import QApplication
 
 from airwriting.config import load_config
+from airwriting.core.tracking import MediaPipeHandDetector
 from airwriting.ui.main_window import MainWindow
 
 
@@ -39,7 +40,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = load_config(path=args.config)
 
     app = QApplication(sys.argv if argv is None else ["airwriting", *argv])
-    window = MainWindow(config, camera_index=args.camera_index, auto_start=True)
+    window = MainWindow(
+        config,
+        hand_detector_factory=lambda: MediaPipeHandDetector(mirrored=True),
+        camera_index=args.camera_index,
+        auto_start=True,
+    )
     window.show()
     return app.exec()
 

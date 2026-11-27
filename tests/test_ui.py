@@ -12,9 +12,34 @@ from PyQt6.QtGui import QImage
 from airwriting.config import ROIConfig, load_config
 from airwriting.core.camera import Handedness
 from airwriting.core.roi import ROIRect
+from airwriting.core.tracking import INDEX_FINGER_TIP, DetectedHand, TrackingState
 from airwriting.ui.camera_view import CameraViewWidget
 from airwriting.ui.main_window import MainWindow
 from conftest import pump_until
+
+
+def _fake_hand(
+    handedness: Handedness,
+    index_tip: tuple[float, float],
+    score: float = 0.95,
+) -> DetectedHand:
+    points = [(0.5, 0.5, 0.0) for _ in range(21)]
+    points[INDEX_FINGER_TIP] = (index_tip[0], index_tip[1], 0.0)
+    return DetectedHand(handedness=handedness, score=score, landmarks=tuple(points))
+
+
+class ControllableHandDetector:
+    """Thread-safe fake HandDetector for testing live MainWindow tracking states."""
+
+    def __init__(self, initial_hands: list[DetectedHand] | None = None) -> None:
+        self.hands: list[DetectedHand] = list(initial_hands or [])
+        self.closed = False
+
+    def detect(self, rgb_frame: NDArray[np.uint8], timestamp_ms: int) -> list[DetectedHand]:
+        return list(self.hands)
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class RepeatingFrameSource:
@@ -116,3 +141,65 @@ def test_main_window_handles_camera_failure_gracefully_and_supports_retry(
     window.close()
     qt_app.processEvents()
     assert working.released is True
+
+
+def test_main_window_displays_state_1_hover_cursor_and_transitions_to_state_0(
+    qt_app: QCoreApplication,
+) -> None:
+    config = load_config()
+    source = RepeatingFrameSource(open_ok=True, width=640, height=480)
+    detector = ControllableHandDetector([_fake_hand(Handedness.RIGHT, (0.5, 0.5))])
+
+    window = MainWindow(
+        config,
+        frame_source_factory=lambda: source,
+        hand_detector_factory=lambda: detector,
+        auto_start=True,
+    )
+    window.resize(1000, 600)
+
+    assert pump_until(qt_app, lambda: window.tracking_state is TrackingState.HOVER)
+    roi_rect = window.camera_view.active_roi_rect()
+    cursor_pos = window.camera_view.cursor_widget_pos()
+    assert roi_rect is not None
+    assert cursor_pos is not None
+    assert roi_rect.x <= cursor_pos[0] <= roi_rect.right
+    assert roi_rect.y <= cursor_pos[1] <= roi_rect.bottom
+    window.camera_view.grab()
+
+    detector.hands = [_fake_hand(Handedness.RIGHT, (0.05, 0.05))]
+    assert pump_until(qt_app, lambda: window.tracking_state is TrackingState.OUT_OF_RANGE)
+    assert window.camera_view.cursor_widget_pos() is None
+
+    window.close()
+    qt_app.processEvents()
+    assert detector.closed is True
+
+
+def test_main_window_handedness_toggle_updates_live_tracking_immediately(
+    qt_app: QCoreApplication,
+) -> None:
+    config = load_config()
+    source = RepeatingFrameSource(open_ok=True, width=640, height=480)
+    detector = ControllableHandDetector([_fake_hand(Handedness.RIGHT, (0.5, 0.5))])
+
+    window = MainWindow(
+        config,
+        frame_source_factory=lambda: source,
+        hand_detector_factory=lambda: detector,
+        auto_start=True,
+    )
+
+    assert pump_until(qt_app, lambda: window.tracking_state is TrackingState.HOVER)
+
+    window.left_hand_button.click()
+    assert pump_until(qt_app, lambda: window.tracking_state is TrackingState.OUT_OF_RANGE)
+
+    detector.hands = [_fake_hand(Handedness.LEFT, (0.5, 0.5))]
+    assert pump_until(qt_app, lambda: window.tracking_state is TrackingState.HOVER)
+    assert window.tracking_result is not None
+    assert window.tracking_result.handedness is Handedness.LEFT
+
+    window.close()
+    qt_app.processEvents()
+    assert detector.closed is True
