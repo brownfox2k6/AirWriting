@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
         self._hand_detector_factory = hand_detector_factory
         self._handedness = Handedness.RIGHT
         self._fps = 0.0
+        self._frame_aspect_ratio = 1.0
         self._tracking_result: TrackingResult | None = None
         self._hand_pose = HandPose.UNKNOWN
         self._pose_debouncer = PoseDebouncer(debounce_s=config.m2_gesture.debounce_s)
@@ -151,8 +152,7 @@ class MainWindow(QMainWindow):
         self._handedness_label.setText(f"Tay thuận: {handedness.display_label}")
         if self._tracker is not None:
             self._tracker.set_dominant_hand(handedness)
-        self._pose_debouncer.reset()
-        self._set_hand_pose(HandPose.UNKNOWN)
+        self._reset_hand_pose()
         self.handedness_changed.emit(handedness)
 
     def start_camera(self) -> None:
@@ -161,8 +161,7 @@ class MainWindow(QMainWindow):
         self._fps = 0.0
         self._fps_label.setText("FPS: 0.0")
         self._set_tracking_result(None)
-        self._pose_debouncer.reset()
-        self._set_hand_pose(HandPose.UNKNOWN)
+        self._reset_hand_pose()
         self._camera_view.set_status_message("Đang kết nối webcam...")
 
         tracker: HandTracker | None = None
@@ -208,8 +207,7 @@ class MainWindow(QMainWindow):
             worker.deleteLater()
         self._tracker = None
         self._set_tracking_result(None)
-        self._pose_debouncer.reset()
-        self._set_hand_pose(HandPose.UNKNOWN)
+        self._reset_hand_pose()
 
     def _set_tracking_result(self, result: TrackingResult | None) -> None:
         self._tracking_result = result
@@ -222,14 +220,20 @@ class MainWindow(QMainWindow):
         self._pose_label.setText(f"Dáng tay: {pose.display_label}")
         self._camera_view.set_hand_pose(pose)
 
+    def _reset_hand_pose(self) -> None:
+        self._pose_debouncer.reset()
+        self._set_hand_pose(HandPose.UNKNOWN)
+
     def _on_frame_ready(self, image: QImage, fps: float) -> None:
         self._fps = fps
+        if image.height() > 0:
+            self._frame_aspect_ratio = image.width() / image.height()
         self._fps_label.setText(f"FPS: {fps:.1f}")
         self._camera_view.set_frame(image)
 
     def _on_tracking_ready(self, result: TrackingResult) -> None:
         self._set_tracking_result(result)
-        raw_pose = classify_hand_pose(result.landmarks)
+        raw_pose = classify_hand_pose(result.landmarks, aspect_ratio=self._frame_aspect_ratio)
         stable_pose = self._pose_debouncer.update(raw_pose, result.timestamp)
         self._set_hand_pose(stable_pose)
 
@@ -237,8 +241,7 @@ class MainWindow(QMainWindow):
         self._fps = 0.0
         self._fps_label.setText("FPS: 0.0")
         self._set_tracking_result(None)
-        self._pose_debouncer.reset()
-        self._set_hand_pose(HandPose.UNKNOWN)
+        self._reset_hand_pose()
         self._camera_view.set_status_message(message)
 
     def closeEvent(self, event: QCloseEvent | None) -> None:

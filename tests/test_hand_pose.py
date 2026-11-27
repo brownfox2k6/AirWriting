@@ -99,6 +99,8 @@ def test_classify_hand_pose_distinguishes_three_m2_gestures_and_labels() -> None
 def test_classify_hand_pose_returns_unknown_for_intermediate_and_invalid_inputs() -> None:
     fist = _build_hand_landmarks()
     three_fingers = _build_hand_landmarks(index=True, middle=True, ring=True)
+    thumb_and_index = _build_hand_landmarks(thumb=True, index=True)
+    thumb_index_middle = _build_hand_landmarks(thumb=True, index=True, middle=True)
     four_fingers_no_thumb = _build_hand_landmarks(
         thumb=False, index=True, middle=True, ring=True, pinky=True
     )
@@ -110,11 +112,32 @@ def test_classify_hand_pose_returns_unknown_for_intermediate_and_invalid_inputs(
 
     assert classify_hand_pose(fist) is HandPose.UNKNOWN
     assert classify_hand_pose(three_fingers) is HandPose.UNKNOWN
+    assert classify_hand_pose(thumb_and_index) is HandPose.UNKNOWN
+    assert classify_hand_pose(thumb_index_middle) is HandPose.UNKNOWN
     assert classify_hand_pose(four_fingers_no_thumb) is HandPose.UNKNOWN
     assert classify_hand_pose(deadzone_index) is HandPose.UNKNOWN
     assert classify_hand_pose(None) is HandPose.UNKNOWN
     assert classify_hand_pose(fist[:20]) is HandPose.UNKNOWN
     assert classify_hand_pose(degenerate_palm) is HandPose.UNKNOWN
+
+    with pytest.raises(ValueError):
+        classify_hand_pose(fist, aspect_ratio=0.0)
+
+
+def test_classify_hand_pose_compensates_for_widescreen_aspect_ratio() -> None:
+    aspect = 16.0 / 9.0
+    for base_landmarks, expected in (
+        (_build_hand_landmarks(index=True), HandPose.ONE_FINGER),
+        (_build_hand_landmarks(index=True, middle=True), HandPose.TWO_FINGERS),
+        (
+            _build_hand_landmarks(thumb=True, index=True, middle=True, ring=True, pinky=True),
+            HandPose.OPEN_PALM,
+        ),
+    ):
+        rotated = _transform_landmarks(base_landmarks, angle_deg=35.0)
+        # Simulate MediaPipe normalized x compression on a 16:9 webcam frame
+        widescreen = [(0.5 + (x - 0.5) / aspect, y, z) for x, y, z in rotated]
+        assert classify_hand_pose(widescreen, aspect_ratio=aspect) is expected
 
 
 def test_classify_hand_pose_is_invariant_to_scale_translation_rotation_and_mirroring() -> None:

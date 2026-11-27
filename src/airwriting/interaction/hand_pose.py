@@ -103,23 +103,44 @@ def _classify_thumb(landmarks: Sequence[Landmark3D], palm_scale: float) -> bool 
     return None
 
 
-def classify_hand_pose(landmarks: Sequence[Landmark3D] | None) -> HandPose:
+def classify_hand_pose(
+    landmarks: Sequence[Landmark3D] | None,
+    *,
+    aspect_ratio: float = 1.0,
+) -> HandPose:
     """Classify 21 MediaPipe 2D landmarks into `ONE_FINGER`, `TWO_FINGERS`, `OPEN_PALM`."""
+    if aspect_ratio <= 0.0:
+        raise ValueError(f"aspect_ratio must be > 0.0, got {aspect_ratio}")
     if landmarks is None or len(landmarks) != EXPECTED_HAND_LANDMARKS:
         return HandPose.UNKNOWN
 
-    palm_scale = _dist2d(landmarks[WRIST], landmarks[MIDDLE_MCP])
+    isotropic: Sequence[Landmark3D] = (
+        [(x * aspect_ratio, y, z) for x, y, z in landmarks] if aspect_ratio != 1.0 else landmarks
+    )
+    palm_scale = _dist2d(isotropic[WRIST], isotropic[MIDDLE_MCP])
     if palm_scale < _EPS:
         return HandPose.UNKNOWN
 
     index_ext, middle_ext, ring_ext, pinky_ext = (
-        _classify_finger(landmarks, mcp, pip, tip, palm_scale) for mcp, pip, tip in _FINGER_TRIPLETS
+        _classify_finger(isotropic, mcp, pip, tip, palm_scale) for mcp, pip, tip in _FINGER_TRIPLETS
     )
-    thumb_ext = _classify_thumb(landmarks, palm_scale)
+    thumb_ext = _classify_thumb(isotropic, palm_scale)
 
-    if index_ext is True and middle_ext is False and ring_ext is False and pinky_ext is False:
+    if (
+        thumb_ext is not True
+        and index_ext is True
+        and middle_ext is False
+        and ring_ext is False
+        and pinky_ext is False
+    ):
         return HandPose.ONE_FINGER
-    if index_ext is True and middle_ext is True and ring_ext is False and pinky_ext is False:
+    if (
+        thumb_ext is not True
+        and index_ext is True
+        and middle_ext is True
+        and ring_ext is False
+        and pinky_ext is False
+    ):
         return HandPose.TWO_FINGERS
     if (
         thumb_ext is True
