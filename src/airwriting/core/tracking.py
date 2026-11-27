@@ -24,7 +24,7 @@ from numpy.typing import NDArray
 from airwriting.config import OneEuroConfig, ROIConfig
 from airwriting.core.camera import Handedness
 from airwriting.core.filters import OneEuroFilter2D
-from airwriting.core.roi import is_point_in_roi, normalize_point_to_roi
+from airwriting.core.roi import denormalize_point_from_roi, is_point_in_roi, normalize_point_to_roi
 
 INDEX_FINGER_TIP = 8
 EXPECTED_HAND_LANDMARKS = 21
@@ -186,8 +186,7 @@ class HandTracker:
 
         clamped_roi_x = _clamp01(smooth_x)
         clamped_roi_y = _clamp01(smooth_y)
-        frame_x = self._roi.x_min + clamped_roi_x * (self._roi.x_max - self._roi.x_min)
-        frame_y = self._roi.y_min + clamped_roi_y * (self._roi.y_max - self._roi.y_min)
+        frame_x, frame_y = denormalize_point_from_roi(clamped_roi_x, clamped_roi_y, self._roi)
 
         return TrackingResult(
             state=TrackingState.HOVER,

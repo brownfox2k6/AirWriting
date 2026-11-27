@@ -12,6 +12,7 @@ from airwriting.core.camera import (
 from airwriting.core.filters import OneEuroFilter, OneEuroFilter2D
 from airwriting.core.roi import (
     ROIRect,
+    denormalize_point_from_roi,
     fit_aspect_rect,
     is_point_in_roi,
     normalize_point_to_roi,
@@ -55,6 +56,7 @@ __all__ = [
     "TrackingState",
     "bgr_to_qimage",
     "build_hand_landmarker_options",
+    "denormalize_point_from_roi",
     "ensure_hand_model",
     "fit_aspect_rect",
     "interpret_handedness",

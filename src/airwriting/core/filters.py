@@ -80,16 +80,7 @@ class OneEuroFilter2D:
 
     def __init__(self, config: OneEuroConfig) -> None:
         self._config = config
-        self._x_filter = OneEuroFilter(
-            min_cutoff=config.min_cutoff,
-            beta=config.beta,
-            d_cutoff=config.d_cutoff,
-        )
-        self._y_filter = OneEuroFilter(
-            min_cutoff=config.min_cutoff,
-            beta=config.beta,
-            d_cutoff=config.d_cutoff,
-        )
+        self.update_config(config)
 
     @property
     def config(self) -> OneEuroConfig:

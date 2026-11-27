@@ -44,6 +44,27 @@ def test_one_euro_filter_tracks_fast_step_with_low_lag_compared_to_fixed_lowpass
     assert abs(0.9 - last_adaptive) < abs(0.9 - last_fixed)
 
 
+def test_one_euro_filter_responds_rapidly_to_instantaneous_step_jump() -> None:
+    adaptive = OneEuroFilter(min_cutoff=1.0, beta=2.0, d_cutoff=1.0)
+    fixed_lowpass = OneEuroFilter(min_cutoff=1.0, beta=0.0, d_cutoff=1.0)
+    dt = 1.0 / 30.0
+
+    for idx in range(10):
+        adaptive.filter(0.1, idx * dt)
+        fixed_lowpass.filter(0.1, idx * dt)
+
+    # Instantaneous step jump 0.1 -> 0.9 held for 3 frames (0.10s)
+    last_adaptive = 0.0
+    last_fixed = 0.0
+    for step in range(10, 13):
+        t = step * dt
+        last_adaptive = adaptive.filter(0.9, t)
+        last_fixed = fixed_lowpass.filter(0.9, t)
+
+    assert abs(0.9 - last_adaptive) < 0.05
+    assert abs(0.9 - last_adaptive) < abs(0.9 - last_fixed)
+
+
 def test_one_euro_filter_reset_non_monotonic_timestamp_and_parameter_validation() -> None:
     flt = OneEuroFilter(min_cutoff=1.0, beta=0.05, d_cutoff=1.0)
     assert flt.filter(0.2, 1.0) == 0.2
