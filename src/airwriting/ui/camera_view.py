@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any, cast
 
 from PyQt6.QtCore import QRect, Qt
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPaintEvent, QPen
@@ -10,6 +11,7 @@ from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 from airwriting.config import ROIConfig
 from airwriting.core.roi import ROIRect, fit_aspect_rect, roi_in_viewport
+from airwriting.core.tracking import TrackingResult, TrackingState
 
 OverlayRenderer = Callable[[QPainter, ROIRect, ROIRect], None]
 
@@ -18,11 +20,12 @@ class CameraViewWidget(QWidget):
     """Displays mirrored webcam frames with a proportional Active ROI overlay."""
 
     def __init__(self, roi: ROIConfig, *, parent: QWidget | None = None) -> None:
-        super().__init__(parent)  # type: ignore[arg-type]
+        super().__init__(cast(Any, parent))
         self._roi = roi
         self._frame: QImage | None = None
         self._status_message: str = "Đang khởi động webcam..."
         self._overlay_renderer: OverlayRenderer | None = None
+        self._tracking_result: TrackingResult | None = None
         self.setMinimumSize(480, 360)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -34,6 +37,10 @@ class CameraViewWidget(QWidget):
     def status_message(self) -> str:
         return self._status_message
 
+    @property
+    def tracking_result(self) -> TrackingResult | None:
+        return self._tracking_result
+
     def set_roi(self, roi: ROIConfig) -> None:
         self._roi = roi
         self.update()
@@ -43,8 +50,14 @@ class CameraViewWidget(QWidget):
         self._status_message = ""
         self.update()
 
+    def set_tracking_result(self, result: TrackingResult | None) -> None:
+        """Update the rendered fingertip tracking state and hover cursor position."""
+        self._tracking_result = result
+        self.update()
+
     def set_status_message(self, message: str) -> None:
         self._frame = None
+        self._tracking_result = None
         self._status_message = message
         self.update()
 
@@ -73,6 +86,17 @@ class CameraViewWidget(QWidget):
             return None
         return roi_in_viewport(self._roi, v_rect)
 
+    def cursor_widget_pos(self) -> tuple[int, int] | None:
+        """Return widget pixel `(x, y)` of the hover cursor when in `State 1`, else None."""
+        v_rect = self.video_rect()
+        res = self._tracking_result
+        if v_rect is None or res is None:
+            return None
+        if res.state is not TrackingState.HOVER or res.frame_point is None:
+            return None
+        fx, fy = res.frame_point
+        return (round(v_rect.x + fx * v_rect.width), round(v_rect.y + fy * v_rect.height))
+
     def paintEvent(self, event: QPaintEvent | None) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -85,6 +109,7 @@ class CameraViewWidget(QWidget):
 
             r_rect = roi_in_viewport(self._roi, v_rect)
             self._draw_roi_overlay(painter, v_rect, r_rect)
+            self._draw_hover_cursor(painter)
 
             if self._overlay_renderer is not None:
                 self._overlay_renderer(painter, v_rect, r_rect)
@@ -132,3 +157,28 @@ class CameraViewWidget(QWidget):
         painter.fillRect(label_rect, QColor(0, 0, 0, 140))
         painter.setPen(QColor(0, 220, 130))
         painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, "ACTIVE ROI")
+
+    def _draw_hover_cursor(self, painter: QPainter) -> None:
+        cursor = self.cursor_widget_pos()
+        if cursor is None:
+            return
+        cx, cy = cursor
+
+        # Outer hollow ring + center dot signifying State 1 (Hover)
+        ring_pen = QPen(QColor(225, 232, 240), 2)
+        painter.setPen(ring_pen)
+        painter.setBrush(QColor(180, 195, 210, 50))
+        painter.drawEllipse(cx - 12, cy - 12, 24, 24)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(255, 255, 255))
+        painter.drawEllipse(cx - 4, cy - 4, 8, 8)
+
+        badge_font = QFont()
+        badge_font.setPointSize(8)
+        badge_font.setBold(True)
+        painter.setFont(badge_font)
+        tag_rect = QRect(cx + 14, cy - 10, 62, 18)
+        painter.fillRect(tag_rect, QColor(18, 20, 24, 180))
+        painter.setPen(QColor(225, 232, 240))
+        painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, "HOVER")

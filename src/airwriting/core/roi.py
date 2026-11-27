@@ -88,3 +88,15 @@ def normalize_point_to_roi(
         nx = min(1.0, max(0.0, nx))
         ny = min(1.0, max(0.0, ny))
     return (nx, ny)
+
+
+def denormalize_point_from_roi(
+    nx: float,
+    ny: float,
+    roi: ROIConfig,
+) -> tuple[float, float]:
+    """Convert ROI-local `[0, 1]` coordinates back into normalized frame coordinates."""
+    return (
+        roi.x_min + nx * (roi.x_max - roi.x_min),
+        roi.y_min + ny * (roi.y_max - roi.y_min),
+    )

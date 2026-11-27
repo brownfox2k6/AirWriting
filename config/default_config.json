@@ -26,6 +26,7 @@
     "y_max": 0.85
   },
   "one_euro": {
+    "enabled": true,
     "min_cutoff": 1.0,
     "beta": 0.05,
     "d_cutoff": 1.0

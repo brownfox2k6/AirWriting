@@ -64,6 +64,7 @@ class ROIConfig:
 
 @dataclass(frozen=True)
 class OneEuroConfig:
+    enabled: bool
     min_cutoff: float
     beta: float
     d_cutoff: float
@@ -164,7 +165,12 @@ def _validate_config(config: AppConfig) -> None:
         raise ConfigValidationError(f"Invalid ROI bounds: {roi}")
 
     oe = config.one_euro
-    if oe.min_cutoff <= 0.0 or oe.beta < 0.0 or oe.d_cutoff <= 0.0:
+    if (
+        not isinstance(oe.enabled, bool)
+        or oe.min_cutoff <= 0.0
+        or oe.beta < 0.0
+        or oe.d_cutoff <= 0.0
+    ):
         raise ConfigValidationError(f"Invalid One Euro parameters: {oe}")
 
     m1 = config.m1_dwell

@@ -1,4 +1,4 @@
-"""Core camera, Active ROI, and tracking utilities for AirWriting."""
+"""Core camera, Active ROI, filtering, and hand tracking utilities for AirWriting."""
 
 from airwriting.core.camera import (
     CameraWorker,
@@ -9,24 +9,57 @@ from airwriting.core.camera import (
     bgr_to_qimage,
     mirror_frame,
 )
+from airwriting.core.filters import OneEuroFilter, OneEuroFilter2D
 from airwriting.core.roi import (
     ROIRect,
+    denormalize_point_from_roi,
     fit_aspect_rect,
     is_point_in_roi,
     normalize_point_to_roi,
     roi_in_viewport,
     roi_to_pixel_rect,
 )
+from airwriting.core.tracking import (
+    DEFAULT_HAND_MODEL_PATH,
+    DEFAULT_HAND_MODEL_URL,
+    EXPECTED_HAND_LANDMARKS,
+    INDEX_FINGER_TIP,
+    DetectedHand,
+    HandDetector,
+    HandTracker,
+    MediaPipeHandDetector,
+    TrackingResult,
+    TrackingState,
+    build_hand_landmarker_options,
+    ensure_hand_model,
+    interpret_handedness,
+)
 
 __all__ = [
     "CameraWorker",
+    "DEFAULT_HAND_MODEL_PATH",
+    "DEFAULT_HAND_MODEL_URL",
+    "DetectedHand",
+    "EXPECTED_HAND_LANDMARKS",
     "FPSCounter",
     "FrameSource",
+    "HandDetector",
+    "HandTracker",
     "Handedness",
+    "INDEX_FINGER_TIP",
+    "MediaPipeHandDetector",
+    "OneEuroFilter",
+    "OneEuroFilter2D",
     "OpenCVFrameSource",
     "ROIRect",
+    "TrackingResult",
+    "TrackingState",
     "bgr_to_qimage",
+    "build_hand_landmarker_options",
+    "denormalize_point_from_roi",
+    "ensure_hand_model",
     "fit_aspect_rect",
+    "interpret_handedness",
     "is_point_in_roi",
     "mirror_frame",
     "normalize_point_to_roi",
