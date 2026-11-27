@@ -26,6 +26,9 @@ dev = [
   "pre-commit>=4.7",
 ]
 
+[project.scripts]
+airwriting = "airwriting.__main__:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
