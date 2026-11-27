@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QSizePolicy, QWidget
 from airwriting.config import ROIConfig
 from airwriting.core.roi import ROIRect, fit_aspect_rect, roi_in_viewport
 from airwriting.core.tracking import TrackingResult, TrackingState
+from airwriting.interaction.hand_pose import HandPose
 
 OverlayRenderer = Callable[[QPainter, ROIRect, ROIRect], None]
 
@@ -26,6 +27,7 @@ class CameraViewWidget(QWidget):
         self._status_message: str = "Đang khởi động webcam..."
         self._overlay_renderer: OverlayRenderer | None = None
         self._tracking_result: TrackingResult | None = None
+        self._hand_pose: HandPose = HandPose.UNKNOWN
         self.setMinimumSize(480, 360)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -41,6 +43,10 @@ class CameraViewWidget(QWidget):
     def tracking_result(self) -> TrackingResult | None:
         return self._tracking_result
 
+    @property
+    def hand_pose(self) -> HandPose:
+        return self._hand_pose
+
     def set_roi(self, roi: ROIConfig) -> None:
         self._roi = roi
         self.update()
@@ -55,9 +61,17 @@ class CameraViewWidget(QWidget):
         self._tracking_result = result
         self.update()
 
+    def set_hand_pose(self, pose: HandPose) -> None:
+        """Update the displayed M2 hand pose badge."""
+        if pose is self._hand_pose:
+            return
+        self._hand_pose = pose
+        self.update()
+
     def set_status_message(self, message: str) -> None:
         self._frame = None
         self._tracking_result = None
+        self._hand_pose = HandPose.UNKNOWN
         self._status_message = message
         self.update()
 
@@ -110,6 +124,7 @@ class CameraViewWidget(QWidget):
             r_rect = roi_in_viewport(self._roi, v_rect)
             self._draw_roi_overlay(painter, v_rect, r_rect)
             self._draw_hover_cursor(painter)
+            self._draw_hand_pose_badge(painter, v_rect)
 
             if self._overlay_renderer is not None:
                 self._overlay_renderer(painter, v_rect, r_rect)
@@ -182,3 +197,26 @@ class CameraViewWidget(QWidget):
         painter.fillRect(tag_rect, QColor(18, 20, 24, 180))
         painter.setPen(QColor(225, 232, 240))
         painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, "HOVER")
+
+    def _draw_hand_pose_badge(self, painter: QPainter, video_rect: ROIRect) -> None:
+        badge_font = QFont()
+        badge_font.setPointSize(9)
+        badge_font.setBold(True)
+        painter.setFont(badge_font)
+
+        badge_width = min(250, max(120, video_rect.width - 16))
+        badge_rect = QRect(video_rect.x + 8, video_rect.bottom - 30, badge_width, 22)
+        painter.fillRect(badge_rect, QColor(18, 20, 24, 185))
+
+        pose_colors = {
+            HandPose.ONE_FINGER: QColor(0, 220, 130),
+            HandPose.TWO_FINGERS: QColor(250, 204, 21),
+            HandPose.OPEN_PALM: QColor(96, 165, 250),
+            HandPose.UNKNOWN: QColor(180, 188, 200),
+        }
+        painter.setPen(pose_colors[self._hand_pose])
+        painter.drawText(
+            badge_rect,
+            Qt.AlignmentFlag.AlignCenter,
+            f"DÁNG TAY: {self._hand_pose.display_label}",
+        )

@@ -13,6 +13,7 @@ from airwriting.config import ROIConfig, load_config
 from airwriting.core.camera import Handedness
 from airwriting.core.roi import ROIRect
 from airwriting.core.tracking import INDEX_FINGER_TIP, DetectedHand, TrackingState
+from airwriting.interaction.hand_pose import HandPose
 from airwriting.ui.camera_view import CameraViewWidget
 from airwriting.ui.main_window import MainWindow
 from conftest import pump_until
@@ -28,14 +29,50 @@ def _fake_hand(
     return DetectedHand(handedness=handedness, score=score, landmarks=tuple(points))
 
 
+def _pose_hand(
+    handedness: Handedness,
+    *,
+    thumb: bool = False,
+    index: bool = False,
+    middle: bool = False,
+    ring: bool = False,
+    pinky: bool = False,
+) -> DetectedHand:
+    pts: list[tuple[float, float, float]] = [(0.50, 0.70, 0.0)]
+    pts.extend([(0.46, 0.66, 0.0), (0.43, 0.61, 0.0)])
+    if thumb:
+        pts.extend([(0.40, 0.57, 0.0), (0.37, 0.54, 0.0)])
+    else:
+        pts.extend([(0.47, 0.59, 0.0), (0.52, 0.60, 0.0)])
+    for (mx, my), extended in (
+        ((0.46, 0.56), index),
+        ((0.50, 0.55), middle),
+        ((0.54, 0.56), ring),
+        ((0.57, 0.58), pinky),
+    ):
+        pts.append((mx, my, 0.0))
+        if extended:
+            pts.extend([(mx, my - 0.06, 0.0), (mx, my - 0.10, 0.0), (mx, my - 0.13, 0.0)])
+        else:
+            pts.extend([(mx, my - 0.04, 0.0), (mx, my + 0.01, 0.0), (mx, my + 0.04, 0.0)])
+    return DetectedHand(handedness=handedness, score=0.96, landmarks=tuple(pts))
+
+
 class ControllableHandDetector:
     """Thread-safe fake HandDetector for testing live MainWindow tracking states."""
 
     def __init__(self, initial_hands: list[DetectedHand] | None = None) -> None:
         self.hands: list[DetectedHand] = list(initial_hands or [])
+        self.flicker_once: list[DetectedHand] | None = None
+        self.detect_calls = 0
         self.closed = False
 
     def detect(self, rgb_frame: NDArray[np.uint8], timestamp_ms: int) -> list[DetectedHand]:
+        self.detect_calls += 1
+        if self.flicker_once is not None:
+            hands = list(self.flicker_once)
+            self.flicker_once = None
+            return hands
         return list(self.hands)
 
     def close(self) -> None:
@@ -199,6 +236,78 @@ def test_main_window_handedness_toggle_updates_live_tracking_immediately(
     assert pump_until(qt_app, lambda: window.tracking_state is TrackingState.HOVER)
     assert window.tracking_result is not None
     assert window.tracking_result.handedness is Handedness.LEFT
+
+    window.close()
+    qt_app.processEvents()
+    assert detector.closed is True
+
+
+def test_main_window_displays_live_debounced_hand_pose_and_resets_on_loss(
+    qt_app: QCoreApplication,
+) -> None:
+    config = load_config(overrides={"m2_gesture": {"debounce_s": 0.04}})
+    source = RepeatingFrameSource(open_ok=True, width=640, height=480)
+    detector = ControllableHandDetector([_pose_hand(Handedness.RIGHT, index=True)])
+
+    window = MainWindow(
+        config,
+        frame_source_factory=lambda: source,
+        hand_detector_factory=lambda: detector,
+        auto_start=True,
+    )
+    window.resize(1000, 600)
+
+    assert pump_until(qt_app, lambda: window.hand_pose is HandPose.ONE_FINGER)
+    assert window.camera_view.hand_pose is HandPose.ONE_FINGER
+    window.camera_view.grab()
+
+    detector.hands = [_pose_hand(Handedness.RIGHT, index=True, middle=True)]
+    assert pump_until(qt_app, lambda: window.hand_pose is HandPose.TWO_FINGERS)
+    assert window.camera_view.hand_pose is HandPose.TWO_FINGERS
+
+    detector.hands = [
+        _pose_hand(Handedness.RIGHT, thumb=True, index=True, middle=True, ring=True, pinky=True)
+    ]
+    assert pump_until(qt_app, lambda: window.hand_pose is HandPose.OPEN_PALM)
+    assert window.camera_view.hand_pose is HandPose.OPEN_PALM
+
+    # Switching dominant hand when only Right hand is present resets pose immediately to UNKNOWN
+    window.left_hand_button.click()
+    assert window.hand_pose is HandPose.UNKNOWN
+    assert window.camera_view.hand_pose is HandPose.UNKNOWN
+
+    window.close()
+    qt_app.processEvents()
+    assert detector.closed is True
+
+
+def test_main_window_filters_one_frame_pose_flicker_via_debounce(
+    qt_app: QCoreApplication,
+) -> None:
+    config = load_config(overrides={"m2_gesture": {"debounce_s": 0.12}})
+    source = RepeatingFrameSource(open_ok=True, width=640, height=480)
+    detector = ControllableHandDetector([_pose_hand(Handedness.RIGHT, index=True)])
+
+    window = MainWindow(
+        config,
+        frame_source_factory=lambda: source,
+        hand_detector_factory=lambda: detector,
+        auto_start=True,
+    )
+    assert pump_until(qt_app, lambda: window.hand_pose is HandPose.ONE_FINGER)
+
+    # Inject a single-frame TWO_FINGERS flicker (~0.01s << 0.12s debounce)
+    observed_during_flicker: list[HandPose] = []
+    detector.flicker_once = [_pose_hand(Handedness.RIGHT, index=True, middle=True)]
+    start_calls = detector.detect_calls
+    assert pump_until(
+        qt_app,
+        lambda: (
+            observed_during_flicker.append(window.hand_pose) is None
+            and detector.detect_calls >= start_calls + 5
+        ),
+    )
+    assert set(observed_during_flicker) == {HandPose.ONE_FINGER}
 
     window.close()
     qt_app.processEvents()
